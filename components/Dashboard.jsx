@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   nfmt, fmt, iso, mkey, mlabel, parseDate, parsePayload, days, median, pctOf, sum, locMeta, LOC_ORDER
 } from '@/lib/format';
 import { normalise } from '@/lib/rolls';
-import { ChartCard, ComboChart, BarList, MeterRing, MiniArea, HeatMap, Histogram, SparkLine, TrendChart } from './charts';
+import { ChartCard, ComboChart, BarList, MeterRing, HeatMap, Histogram, SparkLine, TrendChart } from './charts';
 import { KpiCard, MonthTable, StatusPill, Drawer, Icon } from './ui';
 
 const PRESETS = [
@@ -43,6 +44,33 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   const [toast, setToast] = useState('');
   const toastT = useRef(null);
   const drillRollsRef = useRef(null);
+  const typeBtn = useRef(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 320, maxH: 340 });
+
+  /* Roll-type menu button ke theek neeche khulta hai. Position har scroll/resize par
+     dobara naapi jati hai kyunki menu ab body me (portal se) render hota hai — dekhein
+     neeche wala comment. */
+  useLayoutEffect(() => {
+    if (!ui.typeMenu) return;
+    const place = () => {
+      const r = typeBtn.current?.getBoundingClientRect();
+      if (!r) return;
+      const w = Math.min(340, window.innerWidth - 20);
+      const left = Math.max(10, Math.min(r.left, window.innerWidth - w - 10));
+      const below = window.innerHeight - r.bottom - 18;
+      const above = r.top - 18;
+      const dropDown = below > 260 || below >= above;
+      setMenuPos({
+        top: dropDown ? r.bottom + 6 : Math.max(10, r.top - Math.min(above, 420) - 6),
+        left, width: w,
+        maxH: Math.max(220, Math.min(420, dropDown ? below : above))
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [ui.typeMenu]);
 
   useEffect(() => { setDrillFilter({ value: '', label: '', status: 'all', month: '' }); }, [drill]);
 
@@ -269,17 +297,34 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, matchers, rStart, rEnd, dated, f.types]);
 
+  /* Menu ki list: chune hue fabrics hamesha sabse upar (warna 70 me se apna selection
+     dhoondhna padta tha), phir cutting ke hisaab se. Search chalu ho to seedha match. */
+  const typeMenuList = useMemo(() => {
+    const q = ui.typeQuery.trim().toLowerCase();
+    const withFlag = typeList.map((t) => ({ ...t, on: f.types.includes(t.name) }));
+    const hits = q ? withFlag.filter((t) => t.name.toLowerCase().includes(q)) : withFlag;
+    if (q) return hits.slice(0, 120);
+    return [...hits.filter((t) => t.on), ...hits.filter((t) => !t.on)].slice(0, 120);
+  }, [typeList, f.types, ui.typeQuery]);
+
+  /* portal sirf client par — SSR me document nahi hota */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   /* ── UNIT STATS — sab period ke flow + period-end stock se ── */
   const locStats = useMemo(() => locations.map((L) => {
     let inM = 0, inRolls = 0, cutM = 0, cutRolls = 0, pendM = 0, pendN = 0, openM = 0;
-    const lots = {}, tats = [], tset = {}, byM = {}, byT = {};
+    const lots = {}, tats = [], tset = {}, byM = {}, byMn = {}, byT = {};
     const dayBefore = rStart ? new Date(rStart.getFullYear(), rStart.getMonth(), rStart.getDate() - 1) : null;
     base.forEach((r) => {
       if (r.sheet !== L.key) return;
       if (r.type) tset[r.type] = 1;
       if (inFlowR(r.inD)) { inM += r.total; inRolls++; }
       if (r.cut > 0) {
-        if (r.cutEM) byM[r.cutEM] = (byM[r.cutEM] || 0) + r.cut;   // timeline (poori history)
+        if (r.cutEM) {                                             // timeline (poori history)
+          byM[r.cutEM] = (byM[r.cutEM] || 0) + r.cut;
+          byMn[r.cutEM] = (byMn[r.cutEM] || 0) + 1;
+        }
         if (inFlowR(r.cutE)) {
           cutM += r.cut; cutRolls++;
           if (r.lot) lots[r.lot] = 1;
@@ -311,7 +356,8 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
       ...L, name: L.key, inM, inRolls, cutM, cutRolls, pendM, pendN, openM, available, util,
       lots: Object.keys(lots).length, avgRoll: inRolls ? inM / inRolls : 0, tat: median(tats), tatN: tats.length,
       typeCount: Object.keys(tset).length, topTypes: top,
-      monthly: months.keys.map((x) => byM[x] || 0), tone,
+      monthly: months.keys.map((x) => byM[x] || 0),
+      monthlyRolls: months.keys.map((x) => byMn[x] || 0), tone,
       toneColor: { good: '#0ca30c', warning: '#fab219', serious: '#ec835a', idle: '#7c8899' }[tone],
       toneLabel: tone === 'idle' ? 'No activity' : tone === 'good' ? 'On target' : tone === 'warning' ? 'Watch' : 'Stock piling'
     };
@@ -319,7 +365,6 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   }), [locations, base, months.keys, rStart, rEnd]);
 
   const maxLocCut = Math.max(...locStats.map((l) => l.cutM), 1);
-  const maxMonthlyCut = Math.max(...locStats.flatMap((l) => l.monthly), 1);
   const heat = { rows: locStats.map((l) => l.short), cols: months.labels, matrix: locStats.map((l) => l.monthly) };
 
   /* ── FABRIC STATS ── */
@@ -851,31 +896,10 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
 
             <div className="flex items-center gap-2 relative">
               <span className="eyebrow">Roll type</span>
-              <button className={'chip ' + (f.types.length ? 'is-on' : '')} onClick={() => setUi({ ...ui, typeMenu: !ui.typeMenu })}>
+              <button ref={typeBtn} className={'chip ' + (f.types.length ? 'is-on' : '')} onClick={() => setUi({ ...ui, typeMenu: !ui.typeMenu })}>
                 {f.types.length ? f.types.length + ' selected' : 'All ' + typeList.length}
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="m6 9 6 6 6-6" /></svg>
               </button>
-              {ui.typeMenu ? (
-                <div className="card absolute left-0 top-full mt-2 z-40 fade" style={{ width: 280, padding: 10 }} onClick={(e) => e.stopPropagation()}>
-                  <input value={ui.typeQuery} onChange={(e) => setUi({ ...ui, typeQuery: e.target.value })} placeholder="Search fabric…" className="chip w-full mb-2" style={{ padding: '7px 10px' }} />
-                  <div style={{ maxHeight: 250, overflow: 'auto' }}>
-                    {typeList.filter((t) => !ui.typeQuery || t.name.toLowerCase().includes(ui.typeQuery.toLowerCase())).slice(0, 90).map((t) => (
-                      <button key={t.name} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left" style={{ fontSize: '12.5px' }} onClick={() => toggleIn('types', t.name)}>
-                        <span className="grid place-items-center rounded" style={{ width: 14, height: 14, border: '1.5px solid var(--border-strong)', ...(f.types.includes(t.name) ? { background: 'var(--s-in)', borderColor: 'var(--s-in)' } : {}) }}>
-                          {f.types.includes(t.name) ? <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#fff" strokeWidth="3.4"><path d="m5 13 4 4L19 7" /></svg> : null}
-                        </span>
-                        <span className="flex-1 truncate">{t.name}</span>
-                        <span className="tnum" style={{ color: 'var(--muted)', fontSize: 11 }}>{nfmt(t.cut)}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="hair my-2" />
-                  <div className="flex justify-between">
-                    <button className="chip" onClick={() => set({ types: [] })}>Clear</button>
-                    <button className="chip" onClick={() => setUi({ ...ui, typeMenu: false })}>Done</button>
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             <div className="flex items-center gap-2">
@@ -1117,12 +1141,19 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
                       </div>
                     ))}
                   </div>
+                  {/* Pehle poori timeline ek hi (sabse badi unit wali) scale par thi — isliye
+                      chhoti units ki line bilkul chapti dikhti thi aur kuch samajh nahi aata tha.
+                      Ab sirf aakhri 5 mahine, bars me, har unit apne scale par, aur har bar par
+                      value ka label — isse har card apne aap me padha ja sakta hai. */}
                   <div className="mt-3.5">
-                    <div className="flex items-center justify-between">
-                      <span className="eyebrow">Monthly cutting</span>
-                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>same scale across units</span>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="eyebrow">Cutting — aakhri 5 mahine</span>
+                      <span className="tnum" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        {nfmt(sum(l.monthly.slice(-5)))} m · {nfmt(sum(l.monthlyRolls.slice(-5)))} pcs
+                      </span>
                     </div>
-                    <MiniArea values={l.monthly} cats={months.labels} max={maxMonthlyCut} color="var(--s-cut)" height={76} unit="m" />
+                    <TrendChart mode="bars" values={l.monthly.slice(-5)} rolls={l.monthlyRolls.slice(-5)}
+                      cats={months.labels.slice(-5)} color="var(--s-cut)" height={104} unit="m" />
                   </div>
                   <div className="hair my-3" />
                   <div className="grid grid-cols-2 gap-y-2 gap-x-3" style={{ fontSize: '12.5px' }}>
@@ -1523,7 +1554,71 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
         </Drawer>
       ) : null}
 
-      {ui.typeMenu ? <div className="fixed inset-0 z-30" onClick={() => setUi({ ...ui, typeMenu: false })} /> : null}
+      {/* ROLL TYPE MENU — portal se seedha <body> me.
+          Pehle ye filter card ke andar tha aur click kaam hi nahi karta tha: card par
+          `.rise` animation (fill-mode both) lagi hai jo use ek stacking context bana
+          deti hai, isliye menu ka z-40 uske andar hi dab jata tha aur bahar wala
+          backdrop (z-30) uske upar aa jata tha — har click backdrop kha jata tha.
+          Card ka `overflow:hidden` bhi lambi list ko kaat deta. Portal dono theek karta
+          hai: menu ab kisi ke andar nahi, seedha body me hai. */}
+      {ui.typeMenu && mounted ? createPortal(
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 78 }} onClick={() => setUi((u) => ({ ...u, typeMenu: false }))} />
+          <div className="card fade" style={{
+            position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width, zIndex: 79,
+            padding: 0, display: 'flex', flexDirection: 'column', maxHeight: menuPos.maxH, boxShadow: 'var(--shadow-lift)'
+          }}>
+            <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+              <span className="eyebrow">Roll type</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                {f.types.length ? `${f.types.length} chune` : `${typeList.length} fabrics`}
+              </span>
+            </div>
+            <div className="px-3 pb-2">
+              <div className="flex items-center gap-2 chip" style={{ padding: '6px 10px' }}>
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--muted)" strokeWidth="2" className="shrink-0">
+                  <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+                </svg>
+                <input autoFocus value={ui.typeQuery} onChange={(e) => setUi({ ...ui, typeQuery: e.target.value })}
+                  placeholder="Search fabric…" className="flex-1"
+                  style={{ border: 0, outline: 'none', background: 'transparent', color: 'var(--ink)', fontSize: '12.5px', minWidth: 0 }} />
+                {ui.typeQuery ? (
+                  <button onClick={() => setUi({ ...ui, typeQuery: '' })} style={{ color: 'var(--muted)', lineHeight: 0 }}>
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '0 6px 4px' }}>
+              {typeMenuList.length ? typeMenuList.map((t, i) => (
+                <div key={t.name}>
+                  {/* chune hue upar, uske baad ek lakeer */}
+                  {i === f.types.length && f.types.length && !ui.typeQuery ? <div className="hair" style={{ margin: '5px 8px' }} /> : null}
+                  <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left type-row"
+                    style={{ fontSize: '12.5px' }} onClick={() => toggleIn('types', t.name)}>
+                    <span className="grid place-items-center rounded shrink-0" style={{
+                      width: 15, height: 15, border: '1.5px solid var(--border-strong)',
+                      ...(t.on ? { background: 'var(--s-in)', borderColor: 'var(--s-in)' } : {})
+                    }}>
+                      {t.on ? <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#fff" strokeWidth="3.4"><path d="m5 13 4 4L19 7" /></svg> : null}
+                    </span>
+                    <span className="flex-1 truncate" style={{ fontWeight: t.on ? 600 : 400 }}>{t.name}</span>
+                    <span className="tnum shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>{nfmt(t.cut)} m</span>
+                  </button>
+                </div>
+              )) : (
+                <div style={{ padding: '20px 10px', textAlign: 'center', fontSize: '12.5px', color: 'var(--muted)' }}>
+                  “{ui.typeQuery}” se koi fabric nahi mila
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2 px-3 py-2.5" style={{ borderTop: '1px solid var(--border)' }}>
+              <button className="chip" onClick={() => set({ types: [] })} disabled={!f.types.length}
+                style={{ opacity: f.types.length ? 1 : 0.45 }}>Clear</button>
+              <button className="chip is-on" onClick={() => setUi({ ...ui, typeMenu: false })}>Done</button>
+            </div>
+          </div>
+        </>, document.body) : null}
 
       {toast ? (
         <div className="fixed no-print fade" style={{ left: '50%', bottom: 26, transform: 'translateX(-50%)', zIndex: 90 }}>

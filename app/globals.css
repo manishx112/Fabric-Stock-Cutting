@@ -173,6 +173,9 @@ main.wrap{padding-bottom:76px}
 }
 @media (max-width: 1080px){ .split{grid-template-columns:1fr !important} }
 /* scrollbar chhupao par scroll chalta rahe (tabs strip) */
+.type-row{transition:background .12s}
+.type-row:hover{background:var(--surface-2)}
+
 .noscrollbar{scrollbar-width:none; -ms-overflow-style:none}
 .noscrollbar::-webkit-scrollbar{display:none}
 
