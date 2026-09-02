@@ -354,8 +354,11 @@ export function TrendChart({ values = [], cats = [], rolls = [], color = 'var(--
   }, [values, dense, slot]);
   const labelAt = (i) => labelSet.has(i);
 
-  /* x-axis par utne hi ticks jitne bina takraye aa sakein */
-  const tickEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(innerW / 30))));
+  /* x-axis par utne hi ticks jitne bina takraye aa sakein. 46px ek label ki asli
+     chaudai hai ("Dec '25" jaisa) — 30 rakhne par patli screen par labels chipak jate the. */
+  const tickEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(innerW / 46))));
+  /* Pehla aur aakhri label bahar na latke — unhe andar ki taraf anchor karte hain. */
+  const anchor = (i) => (i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle');
 
   const pts = values.map((v, i) => ({ x: cx(i), y: y(v), v }));
   const line = pts.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
@@ -392,13 +395,13 @@ export function TrendChart({ values = [], cats = [], rolls = [], color = 'var(--
 
         {/* data labels */}
         {values.map((v, i) => (labelAt(i) ? (
-          <text key={'l' + i} x={cx(i)} y={Math.max(11, y(v) - 5)} textAnchor="middle"
+          <text key={'l' + i} x={cx(i)} y={Math.max(11, y(v) - 5)} textAnchor={anchor(i)}
             style={{ fontSize: 10, fontWeight: 600, fill: 'var(--ink-2)' }} className="tnum">{compact(v)}</text>
         ) : null))}
 
         {/* x-axis */}
         {cats.map((cat, i) => (i % tickEvery === 0 ? (
-          <text key={'c' + i} x={cx(i)} y={height - 3} textAnchor="middle"
+          <text key={'c' + i} x={cx(i)} y={height - 3} textAnchor={anchor(i)}
             style={{ fontSize: 9.5, fill: hover === i ? 'var(--ink)' : 'var(--muted)' }}>{cat}</text>
         ) : null))}
 

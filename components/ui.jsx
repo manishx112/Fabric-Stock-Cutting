@@ -59,7 +59,7 @@ export function KpiCard({ label, sub = '', value, unit = '', format = 'int', ico
         <div className="flex-1 min-w-0">
           <div className="eyebrow kpi-label">{label}</div>
         </div>
-        <div className="shrink-0" style={{ minHeight: 22 }}>
+        <div className="kpi-spark shrink-0" style={{ minHeight: 22 }}>
           {spark.length > 1 ? <SparkLine values={spark} color={sparkColor} /> : null}
         </div>
       </div>
@@ -72,7 +72,7 @@ export function KpiCard({ label, sub = '', value, unit = '', format = 'int', ico
 
       {/* NEECHE KA HISSA — hamesha card ke pendhe se chipka, isliye saare cards ka
           footer ek line me baithta hai chahe upar ka content chhota bada ho. */}
-      <div style={{ marginTop: 'auto' }}>
+      <div className="kpi-foot" style={{ marginTop: 'auto' }}>
         {delta !== null || deltaLabel ? (
           <div className="flex items-center gap-2 flex-wrap kpi-meta" style={{ marginTop: 6 }}>
             {delta !== null ? (

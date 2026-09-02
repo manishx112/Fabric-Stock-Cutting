@@ -35,7 +35,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(false);
   const [f, setF] = useState({ preset: 'all', from: '', to: '', locs: [], types: [], status: 'all', q: '', topN: 12 });
-  const [ui, setUi] = useState({ typeMenu: false, typeQuery: '', health: false, source: false });
+  const [ui, setUi] = useState({ typeMenu: false, typeQuery: '', health: false, source: false, filters: false });
   const [showInsights, setShowInsights] = useState(false);
   const [typeSort, setTypeSort] = useState({ k: 'cutM', dir: -1 });
   const [drill, setDrill] = useState(null);
@@ -542,9 +542,6 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
     { k: 'fabric', label: 'Fabric', badge: typeAgg.length },
     { k: 'pipeline', label: 'Pending & speed', badge: stock.rolls }
   ];
-  const dirty = f.preset !== 'all' || f.locs.length || f.types.length || f.status !== 'all' || f.q;
-  const viewEmpty = !rows.length && !pending.length && !flow.inM && !flow.cutM;
-
   const activeFilters = [
     f.locs.length ? 'Unit: ' + f.locs.map((n) => locMeta(n).short).join(', ') : '',
     f.types.length ? 'Roll type: ' + (f.types.length > 3 ? f.types.length + ' selected' : f.types.join(', ')) : '',
@@ -552,6 +549,9 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
     f.preset !== 'all' ? `Period: ${selMonthKey ? mlabel(selMonthKey) : (PRESETS.find((p) => p.k === f.preset) || {}).label}` : '',
     f.q ? `Search: “${f.q}”` : ''
   ].filter(Boolean);
+  const dirty = f.preset !== 'all' || f.locs.length || f.types.length || f.status !== 'all' || f.q;
+  const viewEmpty = !rows.length && !pending.length && !flow.inM && !flow.cutM;
+
 
   /* ── actions ── */
   const toggleIn = (key, v) => set({ [key]: f[key].includes(v) ? f[key].filter((x) => x !== v) : [...f[key], v] });
@@ -758,8 +758,8 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
       {/* TOP BAR */}
       <header className="glass no-print sticky top-0 z-50" style={{ borderLeft: 0, borderRight: 0, borderTop: 0, borderBottom: '1px solid var(--border)' }}>
         <div className="wrap topbar flex items-center gap-3 py-2.5" style={{ paddingBottom: 10 }}>
-          <div className="flex items-center gap-2.5 mr-1">
-            <div className="grid place-items-center rounded-xl" style={{ width: 34, height: 34, background: 'linear-gradient(140deg,var(--s-in),color-mix(in srgb,var(--s-cut) 70%, var(--s-in)))', boxShadow: '0 6px 16px -8px var(--s-in)' }}>
+          <div className="brand-block flex items-center gap-2.5 mr-1">
+            <div className="brand-mark grid place-items-center rounded-xl" style={{ width: 34, height: 34, background: 'linear-gradient(140deg,var(--s-in),color-mix(in srgb,var(--s-cut) 70%, var(--s-in)))', boxShadow: '0 6px 16px -8px var(--s-in)' }}>
               <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round">
                 <path d="M4 7h16M4 12h16M4 17h10" /><circle cx="18.5" cy="17" r="2.2" />
               </svg>
@@ -797,7 +797,21 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
       {/* FILTERS */}
       <div className="wrap no-print" style={{ paddingTop: 16 }}>
         <div className="card card--pad rise">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          {/* Mobile par filter panel band rehta hai — warna pehla KPI 550px neeche chala
+              jata tha. Button par lage hue filters ki ginti dikhti hai. Desktop par ye
+              button chhupa rehta hai aur panel hamesha khula. */}
+          <button className="filter-toggle chip w-full justify-between" onClick={() => setUi((u) => ({ ...u, filters: !u.filters }))}>
+            <span className="flex items-center gap-2">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 5h18M6 12h12M10 19h4" />
+              </svg>
+              Filters
+              {activeFilters.length ? <span className="pill tnum" style={{ padding: '1px 7px' }}>{activeFilters.length}</span> : null}
+            </span>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2"
+              style={{ transform: ui.filters ? 'rotate(180deg)' : 'none', transition: '.18s' }}><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          <div className={'filter-body flex flex-wrap items-center gap-x-5 gap-y-3' + (ui.filters ? ' is-open' : '')}>
             <div className="flex items-center gap-2">
               <span className="eyebrow">Period</span>
               <div className="flex flex-wrap gap-1.5">
@@ -887,7 +901,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
             ) : null}
           </div>
 
-          <div className="hair my-3" />
+          <div className="hair my-3 filter-rule" />
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5" style={{ fontSize: 12, color: 'var(--muted)' }}>
             <span><b className="tnum" style={{ color: 'var(--ink)' }}>{nfmt(rows.length)}</b> of {nfmt(all.length)} rolls is view me</span>
             <span>
@@ -902,7 +916,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
 
       {/* TABS */}
       <div className="wrap no-print" style={{ paddingTop: 18 }}>
-        <div className="flex items-center gap-6 overflow-x-auto" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-6 overflow-x-auto noscrollbar" style={{ borderBottom: '1px solid var(--border)' }}>
           {tabs.map((t) => (
             <button key={t.k} className={'tab ' + (tab === t.k ? 'is-on' : '')} onClick={() => setTab(t.k)}>
               {t.label}{t.badge !== undefined ? <span className="ml-1.5 tnum" style={{ color: 'var(--muted)', fontSize: 11 }}>{t.badge}</span> : null}
@@ -934,7 +948,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
         {/* OVERVIEW */}
         {!viewEmpty && tab === 'overview' ? (
           <section>
-            <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(206px,1fr))' }}>
+            <div className="grid gap-3.5 kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(206px,1fr))' }}>
               {kpiCards.map((c, i) => <KpiCard key={c.label} {...c} delay={i * 55} />)}
             </div>
 
@@ -1163,7 +1177,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
         {/* FABRIC */}
         {!viewEmpty && tab === 'fabric' ? (
           <section>
-            <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))' }}>
+            <div className="grid gap-3.5 kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))' }}>
               {fabricCards.map((c, i) => <KpiCard key={c.label} {...c} delay={i * 55} />)}
             </div>
             <div className="grid gap-3.5 mt-3.5 split" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
@@ -1214,7 +1228,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
               Pending ek <b>stock</b> hai — ye tab <b>{fmt(rEnd)} tak ka poora bacha maal</b> dikhata hai (pichhle mahino ka backlog shamil).
               Unit / roll type / search filters yahan bhi lage hain. Speed (TAT) numbers period ke andar kate rolls ke hain.
             </div>
-            <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))' }}>
+            <div className="grid gap-3.5 kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))' }}>
               {pipeCards.map((c, i) => <KpiCard key={c.label} {...c} delay={i * 55} />)}
             </div>
             <div className="grid gap-3.5 mt-3.5 split" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>

@@ -172,12 +172,64 @@ main.wrap{padding-bottom:76px}
   *,*::before,*::after{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important}
 }
 @media (max-width: 1080px){ .split{grid-template-columns:1fr !important} }
+/* scrollbar chhupao par scroll chalta rahe (tabs strip) */
+.noscrollbar{scrollbar-width:none; -ms-overflow-style:none}
+.noscrollbar::-webkit-scrollbar{display:none}
+
+/* Filters panel: desktop par hamesha khula, mobile par button se khulta hai */
+.filter-toggle{display:none}
+.filter-body{display:flex}
+
 @media (max-width: 760px){
   .wrap{padding:0 12px}
-  .brand-name{font-size:13px; white-space:nowrap}
   .brand-sub{display:none}
-  .topbar{flex-wrap:wrap; row-gap:8px}
-  .card--pad{padding:14px}
+  .card--pad{padding:13px}
+
+  /* HEADER — ek hi row me. Pehle do row leta tha (81px) aur screen kha jata tha. */
+  .topbar{flex-wrap:nowrap; row-gap:0; gap:7px !important}
+  .topbar .chip{padding:5px 8px; gap:5px}
+  /* Brand block bachi hui jagah le leta hai aur naam ellipsis ho jata hai — isliye
+     right ke chips kabhi kat kar bahar nahi jate, chahe screen kitni bhi patli ho. */
+  .brand-block{flex:1 1 auto; min-width:0}
+  .brand-block > div{min-width:0}
+  .brand-name{font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .brand-mark{width:28px !important; height:28px !important}
+
+  /* FILTERS — band rehte hain jab tak tap na karein */
+  .filter-toggle{display:inline-flex}
+  .filter-body{display:none; margin-top:10px}
+  .filter-body.is-open{display:flex}
+  .filter-rule{display:none}
+
+  /* Table thodi kas kar — mobile par zyada column dikhein */
+  .tbl{font-size:12px}
+  .tbl th{padding:8px 8px; letter-spacing:.06em}
+  .tbl td{padding:8px 8px}
+  /* Cell ke andar wali mini-bar patli screen par sirf jagah khaati hai — number zyada
+     kaam ka hai. (Cards ke andar wali bars par asar nahi, sirf table ke andar.) */
+  .tbl .cellbar{display:none}
+  /* Card ke heading aur subtitle chhote — warna aadha screen sirf text me chala jata hai */
+  .card h3{font-size:13.5px !important}
+  /* Subtitle mobile par 6 line le raha tha — do line par kaat do, poora text title me hai */
+  .card h3 + p{font-size:11.5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+
+  /* KPI — mobile par bhi DO card ek row me. Ek-ek karke dikhane par poora screen
+     sirf chaar cards me chala jata tha. Do fit karne ke liye sparkline hata dete hain
+     (usi ki jagah label ko milti hai) aur type thoda chhota kar dete hain. */
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:10px !important}
+  .kpi-spark{display:none}
+  .kpi{padding:10px 11px}
+  .kpi-label{font-size:9.5px; letter-spacing:.07em; min-height:2.3em}
+  .kpi .pill{font-size:10px; padding:1px 6px}
+  /* Patli card me "29.9%" pill aur "Aug '26 vs Jul '26" kabhi ek line me aate the kabhi
+     do me — isse do cards ki rows aapas me nahi milti thi. Mobile par hamesha neeche. */
+  .kpi-meta{flex-direction:column; align-items:flex-start; gap:2px !important; min-height:0}
+  /* margin-top:auto hata do — warna chhote card (Utilisation) me beech me bada khali
+     gap ban jata tha. Ab content upar se behta hai aur bachi jagah neeche rehti hai. */
+  .kpi-foot{margin-top:0 !important}
+
+  /* Drawer poori chaudai le */
+  .drawer{width:100vw; border-left:0}
 }
 @media print{ .no-print{display:none !important} body{background:#fff} .card{box-shadow:none} }
 
