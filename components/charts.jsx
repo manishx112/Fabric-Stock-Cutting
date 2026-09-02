@@ -83,7 +83,10 @@ export function MeterRing({ pct = 0, size = 52, tone = 'good', showLabel = false
 }
 
 /* ── card jisme chart ⇄ table dono ── */
-export function ChartCard({ title, subtitle, note, actions, chart, table, style, defaultView = 'chart' }) {
+/* tableHeight = table wale view ki max height. Iske baad table apne andar scroll karti
+   hai aur heading (.tbl th) sticky rehti hai. Month table ke liye ise chhota rakha hai
+   taaki card apne bagal wale card jitna hi lamba rahe. */
+export function ChartCard({ title, subtitle, note, actions, chart, table, style, defaultView = 'chart', tableHeight = 420 }) {
   const [view, setView] = useState(defaultView);
   return (
     <div className="card rise" style={style}>
@@ -106,7 +109,7 @@ export function ChartCard({ title, subtitle, note, actions, chart, table, style,
         {/* Chart tabhi mount hota hai jab dikh raha ho — chhupe hue element ki width 0 hoti hai
             aur SVG galat naap par ban jata hai (Table-default card me bars gayab ho jate the). */}
         <div style={{ display: view === 'chart' ? 'block' : 'none' }}>{view === 'chart' ? chart : null}</div>
-        {table ? <div style={{ display: view === 'table' ? 'block' : 'none', maxHeight: 420, overflow: 'auto' }}>{table}</div> : null}
+        {table ? <div style={{ display: view === 'table' ? 'block' : 'none', maxHeight: tableHeight, overflow: 'auto' }}>{table}</div> : null}
         {note ? <p style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: 10 }}>{note}</p> : null}
       </div>
     </div>

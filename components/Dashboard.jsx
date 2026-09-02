@@ -31,7 +31,6 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   /* ── state ── */
   const [payload, setPayload] = useState(initialPayload);
   const [meta2, setMeta2] = useState({ source, fetchedAt });
-  const [fixYear, setFixYear] = useState(false);   // default OFF — inward date sheet me jaisi dd/mm/yyyy likhi hai, waisi hi
   const [theme, setTheme] = useState(null);
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(false);
@@ -69,7 +68,9 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   }, []);
 
   /* ── data ── */
-  const all = useMemo(() => normalise(payload, fixYear), [payload, fixYear]);
+  /* Inward date hamesha text ki tarah, dd/mm/yyyy — koi auto-correct nahi.
+     normalise() galtiyan pehchanta phir bhi hai (flag), sirf sudhaarta nahi. */
+  const all = useMemo(() => normalise(payload), [payload]);
 
   const meta = useMemo(() => {
     let lo = null, hi = null, lastCut = null;
@@ -413,12 +414,10 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
       fix: 'Sheet me is column ko formula bana dein: =TEXT(cutting_date,"mmmm") — phir wo apne aap sahi rahega.' });
     if (swapN) items.push({ level: 'Serious', color: '#d03b3b', count: swapN, title: 'Inward date me din aur mahina ulta type hua hai',
       detail: `${swapN} rows (${nfmt(swapM)} m) me inward date roll ke cut hone ke BAAD ki hai — jo ho nahi sakta. Din aur mahina palatne par date cutting se thoda pehle aa jati hai, isliye lagta hai type karte waqt ulta pad gaya (jaise 9 August ko "09/08" ki jagah "08/09").`,
-      fix: fixYear
-        ? 'Sudhaar ON hai — in rows ka din/mahina palat kar dikhaya ja raha hai.'
-        : 'Sheet me inward date theek kar dein — dashboard wahi dd/mm/yyyy padhta hai jo likha hai.' });
+      fix: 'Sheet me inward date theek kar dein — dashboard wahi dd/mm/yyyy padhta hai jo likha hai.' });
     if (yearN) items.push({ level: 'Serious', color: '#ec835a', count: yearN, title: 'Inward date me saal ki typo',
       detail: `${yearN} rows me inward saal aage ka likha hai (2025 ki jagah 2026).`,
-      fix: fixYear ? 'Auto-correct ON hai — saal 1 kam kar diya gaya hai.' : 'Sheet me saal theek kar dein — dashboard likhi hui date hi maanta hai.' });
+      fix: 'Sheet me saal theek kar dein — dashboard likhi hui date hi maanta hai.' });
     if (neg) items.push({ level: 'Note', color: '#fab219', count: neg, title: 'Cutting date inward se 1–2 din pehle',
       detail: `${neg} rows me cutting date arrival se thoda pehle hai — entry ka gap lagta hai (date palatne se bhi theek nahi hota). Stock/flow ke hisaab me aisi cutting arrival ke DIN maani jati hai, isliye monthly totals phir bhi sahi baithte hain. Register me asli dates hi dikhti hain.`,
       fix: 'Inward entry usi din karein jis din maal aaye.' });
@@ -431,7 +430,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
     if (part) items.push({ level: 'Info', color: '#7c8899', count: part, title: 'Aadha cut roll',
       detail: `${part} rolls partially cut hain (kuchh meter bacha hai). Bacha hissa pending stock me ginta hai.`, fix: '—' });
     return { items, total: items.length };
-  }, [all, meta.asOf, fixYear]);
+  }, [all, meta.asOf]);
 
   /* ── INSIGHTS ── */
   const insights = useMemo(() => {
@@ -971,6 +970,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
                 subtitle="Har mahine: kitna aaya, kitna kata, month-end par kitna bacha. Naya mahina sabse upar. Har row par Opening + Inward − Cutting = Bacha."
                 note="Row click karne se upar ke sab cards us mahine par aa jate hain. Cutting hamesha katne ke mahine me ginti hai, chahe roll pehle aaya ho."
                 defaultView="table"
+                tableHeight={300}
                 actions={f.preset === 'custom' ? (
                   <button className="chip" onClick={() => setPreset('all')} style={{ color: 'var(--s-bal)' }}>
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>Back
@@ -1451,22 +1451,6 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
               </div>
             ))}
           </div>
-          <div className="hair my-4" />
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={fixYear} onChange={(e) => setFixYear(e.target.checked)} style={{ marginTop: 3 }} />
-            <span style={{ fontSize: '12.5px' }}>
-              <b>Palti hui inward dates ka sudhaar</b> <span style={{ color: 'var(--muted)' }}>(default: band)</span><br />
-              <span style={{ color: 'var(--muted)' }}>
-                Abhi har date <b>text</b> ki tarah padhi jati hai aur <b>dd/mm/yyyy</b> maani jati hai — bas
-                itna hi. Sheet me jo inward date likhi hai, dashboard wahi maanta hai: na din/mahina
-                palatta hai, na saal badalta hai. Upar wali ginti phir bhi dikhti rehti hai taaki aap
-                sheet me entry theek kar sakein.<br />
-                Ye tick karne par jin rows me cutting date inward se pehle hai (jo ho nahi sakta),
-                unki inward date par anumaan wala sudhaar lag jata hai. <b>Meters kabhi nahi badalte</b> —
-                sirf date dusre mahine me jati hai.
-              </span>
-            </span>
-          </label>
         </Drawer>
       ) : null}
 
