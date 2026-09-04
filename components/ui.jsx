@@ -30,6 +30,10 @@ export function KpiCard({ label, sub = '', value, unit = '', format = 'int', ico
   useEffect(() => {
     const to = Number(value) || 0;
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setShown(to); return; }
+    /* Tab background me ho to requestAnimationFrame chalta hi nahi — number 0 par atka
+       reh jata tha aur user ko galat aankda dikhta tha. Aise me seedha final value
+       likh dete hain (animation ki zaroorat bhi nahi, koi dekh hi nahi raha). */
+    if (typeof document !== 'undefined' && document.hidden) { setShown(to); return; }
     const from = shown, t0 = performance.now(), dur = 620;
     cancelAnimationFrame(raf.current);
     const step = (t) => {
@@ -38,7 +42,11 @@ export function KpiCard({ label, sub = '', value, unit = '', format = 'int', ico
       if (p < 1) raf.current = requestAnimationFrame(step);
     };
     raf.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf.current);
+    /* beech me tab chhup jaye to animation ruk jati hai — wapas aane par (ya chhupte hi)
+       seedha final value par le jate hain. */
+    const settle = () => { if (document.hidden) { cancelAnimationFrame(raf.current); setShown(to); } };
+    document.addEventListener('visibilitychange', settle);
+    return () => { cancelAnimationFrame(raf.current); document.removeEventListener('visibilitychange', settle); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 

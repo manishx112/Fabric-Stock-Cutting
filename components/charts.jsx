@@ -90,7 +90,7 @@ export function ChartCard({ title, subtitle, note, actions, chart, table, style,
   const [view, setView] = useState(defaultView);
   return (
     <div className="card rise" style={style}>
-      <div className="flex items-start justify-between gap-3 p-4 pb-2.5">
+      <div className="chart-head flex items-start justify-between gap-3 p-4 pb-2.5">
         <div className="min-w-0">
           <h3 style={{ fontSize: '14.5px' }}>{title}</h3>
           {subtitle ? <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{subtitle}</p> : null}
@@ -181,6 +181,7 @@ export function ComboChart({ cats = [], series = [], line, rowHeight = 40, maxHe
         {line ? (
           <span className="flex items-center gap-1.5" style={{ fontSize: '11.5px', color: 'var(--ink-2)' }}>
             <i className="key" style={{ background: line.color }} />{line.label}
+            <span style={{ color: 'var(--muted)' }}>(right)</span>
           </span>
         ) : null}
         {scrolls ? (
@@ -214,6 +215,12 @@ export function ComboChart({ cats = [], series = [], line, rowHeight = 40, maxHe
           <circle key={'d' + i} cx={d.x} cy={d.y} r="3.4" fill={line.color} stroke="var(--surface)" strokeWidth="2"
             opacity={hover < 0 || hover === i ? 1 : 0.4} />
         ))}
+        {line ? L.dots.map((d, i) => (
+          <text key={'dl' + i} x={L.pad.l + L.iw + 6} y={d.y + 3.4} textAnchor="start" className="tnum"
+            style={{ fontSize: '9.5px', fontWeight: 700, fill: line.color, opacity: hover < 0 || hover === i ? 1 : 0.4 }}>
+            {compact(d.v)}
+          </text>
+        )) : null}
         <line className="baseline" x1={L.pad.l} x2={L.pad.l} y1={L.pad.t} y2={L.pad.t + L.ih} />
         {L.rows.map((r) => <text key={'y' + r.i} className="axis-lbl" x={L.pad.l - 9} y={r.cy + 3.5} textAnchor="end">{cats[r.i]}</text>)}
         {L.rows.map((r) => (
@@ -248,12 +255,21 @@ export function BarList({ items = [], color = 'var(--s-in)', unit = '', showCum 
   }
   return (
     <div className="flex flex-col" style={{ gap: 9 }}>
+      {showCum ? (
+        <div className="flex items-center gap-2.5" style={{ fontSize: '9.5px', fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+          <span className="bl-name" />
+          <span className="flex-1" />
+          <span className="bl-val" style={{ textAlign: 'right' }}>Cut</span>
+          <span className="bl-share" style={{ textAlign: 'right' }}>Share</span>
+          <span className="bl-cum" style={{ textAlign: 'center' }}>Cumul.</span>
+        </div>
+      ) : null}
       {items.map((it, i) => {
         const isOn = selected && (it.key ?? it.label) === selected;
         return (
         <div key={it.label} className="flex items-center gap-2.5" style={{ cursor: onPick ? 'pointer' : 'default', borderRadius: 8, margin: '-3px -6px', padding: '3px 6px', background: isOn ? 'var(--surface-2)' : 'transparent' }}
           onClick={() => onPick && onPick(it)} title={`${it.label} — ${val(it.value)} ${unit}`}>
-          <span className="truncate" style={{ width: '30%', minWidth: 96, fontSize: '12.5px', fontWeight: isOn ? 700 : 400 }}>{it.label}</span>
+          <span className="truncate bl-name" style={{ fontSize: '12.5px', fontWeight: isOn ? 700 : 400 }}>{it.label}</span>
           <div className="flex-1 relative" style={{ height: 14 }}>
             <div style={{ position: 'absolute', inset: '4px 0', borderRadius: 3, background: 'var(--grid)' }} />
             <div className="rowbar" style={{
@@ -262,11 +278,19 @@ export function BarList({ items = [], color = 'var(--s-in)', unit = '', showCum 
               background: col(i), borderRadius: '3px 4px 4px 3px', animationDelay: i * 45 + 'ms'
             }} />
           </div>
-          <span className="tnum" style={{ width: 78, textAlign: 'right', fontSize: '12.5px', fontWeight: 600 }}>
+          <span className="tnum bl-val" style={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 600 }}>
             {val(it.value)}<span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 3 }}>{unit}</span>
           </span>
-          {showCum ? <span className="pill tnum" style={{ width: 60, justifyContent: 'center' }}>{it.cum.toFixed(0)}%</span>
-            : it.n !== undefined ? <span className="tnum" style={{ width: 72, textAlign: 'right', fontSize: '11.5px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{nfmt(it.n)} rolls</span>
+          {showCum ? (
+            <>
+              <span className="tnum bl-share" style={{ textAlign: 'right', fontSize: '11.5px', color: 'var(--ink-2)' }}>
+                {(it.pct ?? 0).toFixed(1)}%
+              </span>
+              <span className="pill tnum bl-cum" style={{ justifyContent: 'center' }} title="cumulative — yahan tak ka jod">
+                Σ {it.cum.toFixed(0)}%
+              </span>
+            </>
+          ) : it.n !== undefined ? <span className="tnum" style={{ width: 72, textAlign: 'right', fontSize: '11.5px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{nfmt(it.n)} rolls</span>
             : null}
         </div>
         );
@@ -318,41 +342,46 @@ export function MiniArea({ values = [], cats = [], max = 0, color = 'var(--s-cut
    Data label tabhi har point par aata hai jab jagah ho (>=32px per point). Jagah kam ho
    to sirf sabse bada point label hota hai — warna 31 din par labels ek doosre par chadh
    jate hain. X-axis bhi utne hi ticks dikhata hai jitne saaf padhe jaayen. */
-export function TrendChart({ values = [], cats = [], rolls = [], color = 'var(--s-cut)', height = 104, unit = '', mode = 'area' }) {
+export function TrendChart({ values = [], cats = [], tipCats = [], rolls = [], color = 'var(--s-cut)', height = 104, unit = '', mode = 'area', metricLabel = 'Cut' }) {
   const [box, w] = useSize();
   const [tip, showTip, hideTip] = useTip();
   const [hover, setHover] = useState(-1);
   useEffect(() => { setHover(-1); }, [values.length, mode]);
 
-  const padX = 8, padTop = 17, axisH = 15;
-  const plotH = Math.max(12, height - padTop - axisH);
-  const baseY = padTop + plotH;
-  const mx = Math.max(...values, 1);
+  const padX = 8, axisH = 15;
   const n = Math.max(1, values.length);
   const innerW = Math.max(10, w - padX * 2);
-  const y = (v) => padTop + plotH * (1 - (v / mx || 0));
-
   const slot = innerW / n;
   const step = n > 1 ? innerW / (n - 1) : 0;
   const cx = (i) => (mode === 'bars' ? padX + slot * (i + 0.5) : padX + i * step);
 
-  /* labels: jagah ho to har point par; jagah kam ho (31 din wala view) to sabse bade
-     points par — bade se chhote ke kram me, aur do labels ke beech kam se kam 34px ka
-     faasla rakh kar, taaki wo ek doosre par na chadhein. */
+  /* Jagah kam ho (jaise 31 din) to labels do line me jate hain — us doosri line ke
+     liye upar 11px extra chahiye. Isliye padTop dense hone par bada rakhte hain. */
   const dense = slot < 32;
-  const labelSet = useMemo(() => {
-    const set = new Set();
+  const padTop = dense ? 28 : 17;
+  const plotH = Math.max(12, height - padTop - axisH);
+  const baseY = padTop + plotH;
+  const mx = Math.max(...values, 1);
+  const y = (v) => padTop + plotH * (1 - (v / mx || 0));
+  /* Dense chart (jaise 31 din) me ek line me labels nahi samate. Isliye unhe DO
+     line me baant dete hain — ek upar, ek thoda aur upar — taaki paas-paas wale
+     labels bhi bina takraye aa jayein. Isse takreeban dugne values dikhti hain.
+     Map: index -> level (0 = neeche wali line, 1 = upar wali). */
+  const labelLv = useMemo(() => {
+    const lv = new Map();
     const live = values.map((v, i) => i).filter((i) => values[i] > 0);
-    if (!dense) { live.forEach((i) => set.add(i)); return set; }
-    const gap = Math.max(1, Math.ceil(34 / Math.max(slot, 1)));
+    if (!dense) { live.forEach((i) => lv.set(i, 0)); return lv; }
+    const gap = Math.max(1, Math.ceil(13 / Math.max(slot, 1)));   // do line hain, isliye aadha faasla kaafi
+    const picked = [];
     live.sort((a, b) => values[b] - values[a]).forEach((i) => {
-      if (set.size >= 6) return;
-      for (const j of set) if (Math.abs(i - j) < gap) return;
-      set.add(i);
+      if (picked.length >= 14) return;
+      for (const j of picked) if (Math.abs(i - j) < gap) return;
+      picked.push(i);
     });
-    return set;
+    picked.sort((a, b) => a - b).forEach((i, k) => lv.set(i, k % 2));
+    return lv;
   }, [values, dense, slot]);
-  const labelAt = (i) => labelSet.has(i);
+  const labelAt = (i) => labelLv.has(i);
 
   /* x-axis par utne hi ticks jitne bina takraye aa sakein. 46px ek label ki asli
      chaudai hai ("Dec '25" jaisa) — 30 rakhne par patli screen par labels chipak jate the. */
@@ -373,9 +402,10 @@ export function TrendChart({ values = [], cats = [], rolls = [], color = 'var(--
     if (!pts.length) return;
     const i = at(ev);
     setHover(i);
-    const rowsOut = [{ k: 'Cut', v: nfmt(values[i]) + ' ' + unit, c: color }];
+    /* chart par label chhota (1.4K) hai — tooltip hamesha POORA number deta hai */
+    const rowsOut = [{ k: metricLabel, v: nfmt(values[i]) + ' ' + unit, c: color }];
     if (rolls[i] !== undefined) rowsOut.push({ k: 'Rolls', v: nfmt(rolls[i]) + ' pcs' });
-    showTip(ev, cats[i] || '#' + (i + 1), rowsOut);
+    showTip(ev, tipCats[i] || cats[i] || '#' + (i + 1), rowsOut);
   };
 
   return (
@@ -387,15 +417,21 @@ export function TrendChart({ values = [], cats = [], rolls = [], color = 'var(--
             <path d={area} fill={color} opacity=".10" />
             <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
           </>
-        ) : values.map((v, i) => {
-          const bw = Math.max(2, slot * 0.62), h = baseY - y(v);
-          return <rect key={i} x={cx(i) - bw / 2} y={y(v)} width={bw} height={Math.max(v > 0 ? 1.5 : 0, h)} rx={Math.min(2.5, bw / 2)}
-            fill={color} opacity={hover === i ? 1 : 0.82} />;
-        })}
+        ) : (
+          <>
+            {/* hover band — patli bar par bhi maus ka nishana saaf lage */}
+            {hover >= 0 ? <rect x={padX + slot * hover} y={padTop - 4} width={slot} height={plotH + 8} fill="var(--ink)" opacity=".05" rx="3" /> : null}
+            {values.map((v, i) => {
+              const bw = Math.max(2, slot * 0.62), h = baseY - y(v);
+              return <rect key={i} x={cx(i) - bw / 2} y={y(v)} width={bw} height={Math.max(v > 0 ? 1.5 : 0, h)} rx={Math.min(2.5, bw / 2)}
+                fill={color} opacity={hover < 0 ? 0.86 : hover === i ? 1 : 0.4} />;
+            })}
+          </>
+        )}
 
         {/* data labels */}
         {values.map((v, i) => (labelAt(i) ? (
-          <text key={'l' + i} x={cx(i)} y={Math.max(11, y(v) - 5)} textAnchor={anchor(i)}
+          <text key={'l' + i} x={cx(i)} y={Math.max(10, y(v) - 5 - labelLv.get(i) * 11)} textAnchor={anchor(i)}
             style={{ fontSize: 10, fontWeight: 600, fill: 'var(--ink-2)' }} className="tnum">{compact(v)}</text>
         ) : null))}
 
@@ -422,7 +458,10 @@ export function HeatMap({ rows = [], cols = [], matrix = [], unit = '' }) {
   const [tip, showTip, hideTip] = useTip();
   const ramp = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)', 'var(--seq-6)', 'var(--seq-7)'];
   const max = Math.max(...matrix.flat(), 1);
-  const shade = (v) => (!v ? 'var(--surface-2)' : ramp[Math.min(6, Math.floor((v / max) * 6.999))]);
+  const step = (v) => Math.min(6, Math.floor((v / max) * 6.999));
+  const shade = (v) => (!v ? 'var(--surface-2)' : ramp[step(v)]);
+  /* gehre shade (index 3+) par safed text padhne me aasan hai */
+  const deep = (v) => step(v) >= 3;
   return (
     <div>
       <div style={{ overflowX: 'auto' }}>
@@ -430,7 +469,8 @@ export function HeatMap({ rows = [], cols = [], matrix = [], unit = '' }) {
           <div />
           {cols.map((c) => <div key={c} className="axis-lbl text-center" style={{ fontSize: '10.5px', color: 'var(--muted)', paddingBottom: 2 }}>{c}</div>)}
           {rows.map((r, i) => (
-            <Row key={r} label={r} vals={matrix[i]} shade={shade} onOver={(e, j) => showTip(e, `${r} · ${cols[j]}`, [{ k: 'Cut', v: nfmt(matrix[i][j]) + ' ' + unit, c: shade(matrix[i][j]) }])} onOut={hideTip} />
+            <Row key={r} label={r} vals={matrix[i]} shade={shade} deep={deep}
+              onOver={(e, j) => showTip(e, `${r} · ${cols[j]}`, [{ k: 'Cut', v: nfmt(matrix[i][j]) + ' ' + unit, c: shade(matrix[i][j]) }])} onOut={hideTip} />
           ))}
         </div>
       </div>
@@ -443,13 +483,19 @@ export function HeatMap({ rows = [], cols = [], matrix = [], unit = '' }) {
     </div>
   );
 }
-function Row({ label, vals, shade, onOver, onOut }) {
+function Row({ label, vals, shade, deep, onOver, onOut }) {
   return (
     <>
       <div className="truncate" style={{ fontSize: 12, color: 'var(--ink-2)', alignSelf: 'center', paddingRight: 8 }}>{label}</div>
       {vals.map((v, j) => (
-        <div key={j} className="cell" style={{ background: shade(v), height: 34, borderRadius: 5 }}
-          onMouseMove={(e) => onOver(e, j)} onMouseLeave={onOut} />
+        <div key={j} className="cell grid place-items-center tnum" onMouseMove={(e) => onOver(e, j)} onMouseLeave={onOut}
+          style={{
+            background: shade(v), height: 34, borderRadius: 5,
+            fontSize: '10.5px', fontWeight: 600,
+            color: !v ? 'var(--muted)' : deep(v) ? '#fff' : 'var(--ink)'
+          }}>
+          {v ? compact(v) : '—'}
+        </div>
       ))}
     </>
   );

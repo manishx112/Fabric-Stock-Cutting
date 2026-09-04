@@ -111,6 +111,11 @@ main.wrap{padding-bottom:76px}
 }
 .tbl th.sortable{cursor:pointer; user-select:none}
 .tbl th.sortable:hover{color:var(--ink)}
+.tbl th.sortable:hover .sort-ind{opacity:.85}
+/* jis column par sort laga hai wo saaf dikhna chahiye */
+.tbl th.is-sorted{color:var(--ink)}
+/* ↕ halka rehta hai — batata hai ki click ho sakta hai, par dhyan nahi kheenchta */
+.sort-ind{margin-left:3px; font-size:10px; opacity:.35; transition:opacity .12s}
 .tbl td{padding:9px 12px; border-bottom:1px solid var(--grid); vertical-align:middle}
 .tbl tbody tr{transition:background .14s}
 .tbl tbody tr:hover{background:var(--surface-2)}
@@ -173,6 +178,19 @@ main.wrap{padding-bottom:76px}
 }
 @media (max-width: 1080px){ .split{grid-template-columns:1fr !important} }
 /* scrollbar chhupao par scroll chalta rahe (tabs strip) */
+/* BarList ke column — desktop par khule, mobile par kase hue.
+   Cumulative wala column jodne ke baad mobile par bar ki chaudai 0 ho gayi thi. */
+.bl-name{width:30%; min-width:96px}
+.bl-val{width:78px}
+.bl-share{width:46px}
+.bl-cum{width:62px}
+@media (max-width:760px){
+  .bl-name{width:26%; min-width:68px}
+  .bl-val{width:62px; font-size:11.5px}
+  .bl-share{width:36px; font-size:10.5px}
+  .bl-cum{width:46px; font-size:9.5px; padding:1px 4px}
+}
+
 .type-row{transition:background .12s}
 .type-row:hover{background:var(--surface-2)}
 
@@ -213,6 +231,13 @@ main.wrap{padding-bottom:76px}
   .tbl .cellbar{display:none}
   /* Card ke heading aur subtitle chhote — warna aadha screen sirf text me chala jata hai */
   .card h3{font-size:13.5px !important}
+  /* Card heading aur uske actions (Top 8/12/20, Chart/Table) mobile par ek row me
+     nahi aate — actions title ko itna dabaa dete the ki naam "…rana hai" jaisa kat
+     jata tha. Ab actions apni line par jate hain. */
+  .chart-head{flex-wrap:wrap}
+  .chart-head > div:first-child{min-width:100%}
+  .chart-head > div:last-child{margin-left:auto}
+
   /* Subtitle mobile par 6 line le raha tha — do line par kaat do, poora text title me hai */
   .card h3 + p{font-size:11.5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
 

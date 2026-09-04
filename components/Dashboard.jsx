@@ -40,7 +40,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   const [showInsights, setShowInsights] = useState(false);
   const [typeSort, setTypeSort] = useState({ k: 'cutM', dir: -1 });
   const [drill, setDrill] = useState(null);
-  const [drillFilter, setDrillFilter] = useState({ value: '', label: '', status: 'all', month: '' });
+  const [drillFilter, setDrillFilter] = useState({ value: '', label: '', status: 'all', month: '', metric: 'cut' });
   const [toast, setToast] = useState('');
   const toastT = useRef(null);
   const drillRollsRef = useRef(null);
@@ -72,7 +72,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
     return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
   }, [ui.typeMenu]);
 
-  useEffect(() => { setDrillFilter({ value: '', label: '', status: 'all', month: '' }); }, [drill]);
+  useEffect(() => { setDrillFilter({ value: '', label: '', status: 'all', month: '', metric: 'cut' }); }, [drill]);
 
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
   const say = (msg) => {
@@ -607,7 +607,11 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
     else set({ preset: kk });
   };
   const goTab = (t) => { setTab(t); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const sortArrow = (kk, s) => (s.k === kk ? (s.dir > 0 ? '↑' : '↓') : '');
+  const sortArrow = (kk, s) => (
+    <span className="sort-ind" style={s.k === kk ? { opacity: 1, color: 'var(--s-in)' } : undefined}>
+      {s.k === kk ? (s.dir > 0 ? '↑' : '↓') : '↕'}
+    </span>
+  );
 
   /* ── TAAZA DATA (cold cache se bachne ke liye) ──
      Server se aaya HTML 60 second tak purana ho sakta hai, aur deploy ke turant baad
@@ -1153,7 +1157,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
                       </span>
                     </div>
                     <TrendChart mode="bars" values={l.monthly.slice(-5)} rolls={l.monthlyRolls.slice(-5)}
-                      cats={months.labels.slice(-5)} color="var(--s-cut)" height={104} unit="m" />
+                      cats={months.labels.slice(-5)} metricLabel="Cutting" color="var(--s-cut)" height={104} unit="m" />
                   </div>
                   <div className="hair my-3" />
                   <div className="grid grid-cols-2 gap-y-2 gap-x-3" style={{ fontSize: '12.5px' }}>
@@ -1225,14 +1229,17 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
                     ))}</tbody>
                   </table>}
               />
-              <ChartCard title="Fabric register" subtitle={`${typeRows.length} fabric types is view me. Column heading click = sort, row click = drill down.`}
+              <ChartCard title="Fabric register" subtitle={`${typeRows.length} fabric types. Heading par click = us column se sort (sabse zyada upar), row click = poora record.`}
                 chart={
                   <div style={{ maxHeight: 430, overflow: 'auto' }}>
                     <table className="tbl">
                       <thead><tr>
-                        <th className="sortable" onClick={() => setTypeSort({ k: 'label', dir: typeSort.k === 'label' ? -typeSort.dir : -1 })}>Fabric {sortArrow('label', typeSort)}</th>
+                        <th className={'sortable' + (typeSort.k === 'label' ? ' is-sorted' : '')} title="Click = sort"
+                          onClick={() => setTypeSort({ k: 'label', dir: typeSort.k === 'label' ? -typeSort.dir : -1 })}>Fabric {sortArrow('label', typeSort)}</th>
                         {[['inM', 'In'], ['cutM', 'Cut'], ['pendM', 'Pending']].map(([kk, lbl]) => (
-                          <th key={kk} className="sortable num" onClick={() => setTypeSort({ k: kk, dir: typeSort.k === kk ? -typeSort.dir : -1 })}>{lbl} {sortArrow(kk, typeSort)}</th>
+                          <th key={kk} className={'sortable num' + (typeSort.k === kk ? ' is-sorted' : '')}
+                            title={`Click = ${lbl} ke hisaab se sort (pehla click = sabse zyada upar)`}
+                            onClick={() => setTypeSort({ k: kk, dir: typeSort.k === kk ? -typeSort.dir : -1 })}>{lbl} {sortArrow(kk, typeSort)}</th>
                         ))}
                         <th>Trend</th>
                       </tr></thead>
@@ -1338,34 +1345,43 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
         const breakdown = Object.values(agg).sort((a, b) => b.value - a.value).slice(0, 6);
 
         /* CHART — All months par mahine-wise, koi mahina chuna ho to us mahine ka din-wise.
-           Dono me value ka label aur rolls (pcs) tooltip me aate hain. Ye bhi drawer ke
-           baaki filters (status, breakdown selection) ke sath chalta hai. */
-        const chartRows = drillRows.filter((r) => r.cut > 0 && inDrillStatus(r)
+           Upar right ke toggle se Cutting ya Inward chun sakte hain: cutting CUTTING DATE
+           se ginti hai, inward INWARD DATE se — isliye ek hi roll dono me alag mahine me
+           aa sakta hai. Ye bhi drawer ke baaki filters ke saath chalta hai. */
+        const isIn = drillFilter.metric === 'in';
+        const chartRows = drillRows.filter((r) => (isIn ? !!r.inD : r.cut > 0) && inDrillStatus(r)
           && (!drillFilter.value || r[drill.breakdownField] === drillFilter.value));
+        const mColor = isIn ? 'var(--s-in)' : 'var(--s-cut)';
+        const mWord = isIn ? 'Inward' : 'Cutting';
         let chart;
         if (drillFilter.month) {
           const p = drillFilter.month.split('-');
           const dim = new Date(+p[0], +p[1], 0).getDate();
           const vals = Array(dim).fill(0), cnt = Array(dim).fill(0);
           chartRows.forEach((r) => {
-            if (r.cutEM !== drillFilter.month || !r.cutE) return;
-            const i = r.cutE.getDate() - 1;
-            vals[i] += r.cut; cnt[i]++;
+            const dt = isIn ? r.inD : r.cutE;
+            const mk = isIn ? r.inM : r.cutEM;
+            if (mk !== drillFilter.month || !dt) return;
+            const i = dt.getDate() - 1;
+            vals[i] += isIn ? r.total : r.cut; cnt[i]++;
           });
-          chart = { mode: 'bars', values: vals, rolls: cnt, cats: vals.map((_, i) => String(i + 1)),
-            title: `Din-wise cutting — ${mlabel(drillFilter.month)}`,
+          chart = { mode: 'bars', values: vals, rolls: cnt, color: mColor, metricLabel: mWord,
+            cats: vals.map((_, i) => String(i + 1)),
+            tipCats: vals.map((_, i) => `${i + 1} ${mlabel(drillFilter.month)}`),
+            title: `Din-wise ${mWord.toLowerCase()} — ${mlabel(drillFilter.month)}`,
             note: `${nfmt(sum(vals))} m · ${nfmt(sum(cnt))} pcs · ${cnt.filter((x) => x).length} din` };
         } else {
           const idx = {};
           months.keys.forEach((k, i) => { idx[k] = i; });
           const vals = months.keys.map(() => 0), cnt = months.keys.map(() => 0);
           chartRows.forEach((r) => {
-            const i = idx[r.cutEM];
+            const i = idx[isIn ? r.inM : r.cutEM];
             if (i === undefined) return;
-            vals[i] += r.cut; cnt[i]++;
+            vals[i] += isIn ? r.total : r.cut; cnt[i]++;
           });
-          chart = { mode: 'area', values: vals, rolls: cnt, cats: months.labels,
-            title: 'Monthly cutting',
+          chart = { mode: 'area', values: vals, rolls: cnt, color: mColor, metricLabel: mWord,
+            cats: months.labels, tipCats: months.labels,
+            title: `Monthly ${mWord.toLowerCase()}`,
             note: `${nfmt(sum(vals))} m · ${nfmt(sum(cnt))} pcs · mahina chunne par din-wise dikhega` };
         }
 
@@ -1401,16 +1417,27 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
               );
             })}
           </div>
-          {chart.values.some((v) => v > 0) ? (
-            <div className="mt-4">
-              <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
-                <span className="eyebrow">{chart.title}</span>
-                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{chart.note}</span>
+          <div className="mt-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+              <span className="eyebrow">{chart.title}</span>
+              <div className="seg shrink-0">
+                {[['cut', 'Cutting'], ['in', 'Inward']].map(([k, lbl]) => (
+                  <button key={k} className={drillFilter.metric === k ? 'is-on' : ''}
+                    onClick={() => setDrillFilter((df) => ({ ...df, metric: k }))}>{lbl}</button>
+                ))}
               </div>
-              <TrendChart mode={chart.mode} values={chart.values} rolls={chart.rolls} cats={chart.cats}
-                color="var(--s-cut)" height={112} unit="m" />
             </div>
-          ) : null}
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{chart.note}</div>
+            {chart.values.some((v) => v > 0) ? (
+              <TrendChart mode={chart.mode} values={chart.values} rolls={chart.rolls} cats={chart.cats}
+                tipCats={chart.tipCats} metricLabel={chart.metricLabel}
+                color={chart.color} height={112} unit="m" />
+            ) : (
+              <div style={{ padding: '22px 10px', textAlign: 'center', fontSize: '12.5px', color: 'var(--muted)' }}>
+                Is scope me koi {chart.metricLabel.toLowerCase()} nahi hua.
+              </div>
+            )}
+          </div>
           {breakdown.length ? (
             <div className="mt-4">
               <div className="eyebrow mb-1.5">
