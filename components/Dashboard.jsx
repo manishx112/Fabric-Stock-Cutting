@@ -82,12 +82,15 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   };
 
   useEffect(() => {
-    setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    /* OS ka dark mode nahi dekhte — default light hai. Sirf ye padhte hain ki
+       <html> par abhi kya laga hai (boot script ne user ki purani choice lagayi ho to wahi). */
+    setTheme(document.documentElement.getAttribute('data-theme') || 'light');
   }, []);
   const toggleTheme = () => {
     const t = theme === 'dark' ? 'light' : 'dark';
     setTheme(t);
     document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('rc-theme', t); } catch (e) { /* private window — koi baat nahi */ }
   };
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') setUi((u) => ({ ...u, typeMenu: false, health: false, source: false })); };
@@ -837,7 +840,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
           <button className="chip" onClick={() => setUi({ ...ui, health: true })} title={health.total + ' data quality notes'}>
             <Icon name="alert" size={14} /><span className="tnum">{health.total}</span>
           </button>
-          <button className="chip" onClick={toggleTheme} title={'Theme: ' + (theme || 'system')}>
+          <button className="chip" onClick={toggleTheme} title={theme === 'dark' ? 'Light theme par jayein' : 'Dark theme par jayein'}>
             {theme === 'dark'
               ? <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" /></svg>
               : <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>}
