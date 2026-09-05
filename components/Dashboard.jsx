@@ -234,13 +234,14 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
 
   /* ── MAHINE KI TIMELINE (matcher-scoped, date-filter se AZAAD — poori history dikhti hai) ── */
   const months = useMemo(() => {
-    const mi = {}, mc = {}, keys = {};
+    const mi = {}, mc = {}, min = {}, mcn = {}, keys = {};
     base.forEach((r) => {
-      if (r.inM) { mi[r.inM] = (mi[r.inM] || 0) + r.total; keys[r.inM] = 1; }
-      if (r.cut > 0 && r.cutEM) { mc[r.cutEM] = (mc[r.cutEM] || 0) + r.cut; keys[r.cutEM] = 1; }
+      if (r.inM) { mi[r.inM] = (mi[r.inM] || 0) + r.total; min[r.inM] = (min[r.inM] || 0) + 1; keys[r.inM] = 1; }
+      if (r.cut > 0 && r.cutEM) { mc[r.cutEM] = (mc[r.cutEM] || 0) + r.cut; mcn[r.cutEM] = (mcn[r.cutEM] || 0) + 1; keys[r.cutEM] = 1; }
     });
     const ks = Object.keys(keys).sort();
     const inA = ks.map((x) => mi[x] || 0), cutA = ks.map((x) => mc[x] || 0);
+    const inN = ks.map((x) => min[x] || 0), cutN = ks.map((x) => mcn[x] || 0);
     /* har mahine ke aakhri din ka closing stock — wahi hisaab jo pending/stock cards ka */
     const closing = [], closingRolls = [];
     ks.forEach((kk) => {
@@ -256,7 +257,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
         delta: i > 0 && map[kk[i - 1]] ? ((map[x] - map[kk[i - 1]]) / map[kk[i - 1]]) * 100 : null
       }));
     };
-    return { keys: ks, labels: ks.map(mlabel), inM: inA, cutM: cutA, closing, closingRolls, inTable: table(mi), cutTable: table(mc) };
+    return { keys: ks, labels: ks.map(mlabel), inM: inA, cutM: cutA, inRolls: inN, cutRolls: cutN, closing, closingRolls, inTable: table(mi), cutTable: table(mc) };
   }, [base, stockAt]);
 
   /* MoM delta — aadhe mahine ko poore mahine se compare karna galat hai (Sep abhi 8 din ka hai),
@@ -365,7 +366,8 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
   }), [locations, base, months.keys, rStart, rEnd]);
 
   const maxLocCut = Math.max(...locStats.map((l) => l.cutM), 1);
-  const heat = { rows: locStats.map((l) => l.short), cols: months.labels, matrix: locStats.map((l) => l.monthly) };
+  const heat = { rows: locStats.map((l) => l.short), cols: months.labels,
+    matrix: locStats.map((l) => l.monthly), rollsMatrix: locStats.map((l) => l.monthlyRolls) };
 
   /* ── FABRIC STATS ── */
   const typeAgg = useMemo(() => {
@@ -1020,9 +1022,9 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
                 ) : null}
                 chart={
                   <ComboChart cats={months.labels} rowHeight={34} onPick={(i) => pickMonth(i)}
-                    series={[{ key: 'in', label: 'Inward', color: 'var(--s-in)', values: months.inM },
-                             { key: 'cut', label: 'Cutting', color: 'var(--s-cut)', values: months.cutM }]}
-                    line={{ label: 'Month-end bacha stock', color: 'var(--s-bal)', values: months.closing }} />
+                    series={[{ key: 'in', label: 'Inward', color: 'var(--s-in)', values: months.inM, rolls: months.inRolls },
+                             { key: 'cut', label: 'Cutting', color: 'var(--s-cut)', values: months.cutM, rolls: months.cutRolls }]}
+                    line={{ label: 'Month-end bacha stock', color: 'var(--s-bal)', values: months.closing, rolls: months.closingRolls }} />
                 }
                 table={
                   <table className="tbl">
@@ -1097,7 +1099,7 @@ export default function Dashboard({ initialPayload, source = 'snapshot', fetched
             <div className="grid gap-3.5 mt-3.5 split" style={{ gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)' }}>
               <ChartCard title="Cutting load — unit × month" subtitle="Kaunsi unit ne kis mahine kitna kata (meters)."
                 defaultView="table"
-                chart={<HeatMap rows={heat.rows} cols={heat.cols} matrix={heat.matrix} unit="m" />}
+                chart={<HeatMap rows={heat.rows} cols={heat.cols} matrix={heat.matrix} rollsMatrix={heat.rollsMatrix} unit="m" />}
                 table={
                   <table className="tbl">
                     <thead><tr><th>Unit</th>{heat.cols.map((c) => <th key={c} className="num">{c}</th>)}</tr></thead>

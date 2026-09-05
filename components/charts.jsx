@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { nfmt, compact, niceMax, barPath, hBarPath } from '@/lib/format';
 
 /* ── container width (SVG charts responsive rakhne ke liye) ── */
@@ -30,10 +31,35 @@ function useTip() {
   return [tip, show, hide];
 }
 
+/* Tip ko PORTAL se seedha <body> me bhejte hain.
+   Wajah: har chart `.card` ke andar hai aur `.rise` animation (fill-mode: both) ka
+   transform us card ko "containing block" bana deta hai — uske andar `position: fixed`
+   viewport ke hisaab se nahi, CARD ke hisaab se lagta hai. Isliye tooltip mouse se
+   sainkdon pixel door, aksar screen ke bahar chala jata tha aur kisi ko dikhta hi nahi
+   tha. Body me jane par fixed ka matlab wapas "viewport" ho jata hai. */
 export function Tip({ tip }) {
-  if (!tip) return null;
-  return (
-    <div className="tip" style={{ left: tip.x + 'px', top: tip.y + 'px' }}>
+  const ref = useRef(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  useLayoutEffect(() => {
+    if (!tip || !ref.current) return;
+    const b = ref.current.getBoundingClientRect();
+    /* sirf tab set karo jab sach me badla ho — warna har mousemove par loop ban jata hai */
+    if (Math.abs(b.width - box.w) > 1 || Math.abs(b.height - box.h) > 1) setBox({ w: b.width, h: b.height });
+  }, [tip, box.w, box.h]);
+
+  if (!tip || !mounted) return null;
+  const m = 8;                                  // kinaare se itni jagah chhodo
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+  const w = box.w || 150, h = box.h || 72;
+  const left = Math.max(m, Math.min(tip.x - w / 2, vw - w - m));
+  const above = tip.y - h - 14;
+  const top = above < m ? Math.min(tip.y + 18, vh - h - m) : above;
+
+  return createPortal(
+    <div ref={ref} className="tip" style={{ left, top }}>
       <div className="eyebrow" style={{ marginBottom: 4 }}>{tip.title}</div>
       {tip.rows.map((r) => (
         <div key={r.k} className="flex items-center gap-2" style={{ padding: '1.5px 0' }}>
@@ -42,8 +68,7 @@ export function Tip({ tip }) {
           <b className="tnum">{r.v}</b>
         </div>
       ))}
-    </div>
-  );
+    </div>, document.body);
 }
 
 /* ── sparkline ── */
@@ -163,8 +188,15 @@ export function ComboChart({ cats = [], series = [], line, rowHeight = 40, maxHe
 
   const move = (ev, i) => {
     setHover(i);
-    const rows = series.map((s) => ({ k: s.label, v: nfmt(s.values[i]) + ' m', c: s.color }));
-    if (line) rows.push({ k: line.label, v: nfmt(line.values[i]) + ' m', c: line.color });
+    /* meters ke saath rolls/pcs bhi — sirf meter se "kitne roll" ka andaza nahi lagta */
+    const rows = series.map((s) => ({
+      k: s.label, c: s.color,
+      v: nfmt(s.values[i]) + ' m' + (s.rolls ? '  ·  ' + nfmt(s.rolls[i]) + ' pcs' : '')
+    }));
+    if (line) rows.push({
+      k: line.label, c: line.color,
+      v: nfmt(line.values[i]) + ' m' + (line.rolls ? '  ·  ' + nfmt(line.rolls[i]) + ' pcs' : '')
+    });
     showTip(ev, cats[i], rows);
   };
 
@@ -323,7 +355,9 @@ export function MiniArea({ values = [], cats = [], max = 0, color = 'var(--s-cut
 
   return (
     <div ref={box} style={{ position: 'relative' }}>
-      <svg width={w} height={height} style={{ display: 'block' }} onMouseMove={move} onMouseLeave={() => { setHover(-1); hideTip(); }}>
+      <svg width={w} height={height} style={{ display: 'block', touchAction: 'pan-y' }}
+        onMouseMove={move} onMouseLeave={() => { setHover(-1); hideTip(); }}
+        onTouchStart={touch} onTouchMove={touch} onTouchEnd={() => { setHover(-1); hideTip(); }}>
         <path d={area} fill={color} opacity=".10" />
         <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         {hover >= 0 && pts[hover] ? <line x1={pts[hover].x} x2={pts[hover].x} y1={pad} y2={height - pad} stroke="var(--axis)" strokeWidth="1" /> : null}
@@ -383,9 +417,14 @@ export function TrendChart({ values = [], cats = [], tipCats = [], rolls = [], c
   }, [values, dense, slot]);
   const labelAt = (i) => labelLv.has(i);
 
-  /* x-axis par utne hi ticks jitne bina takraye aa sakein. 46px ek label ki asli
-     chaudai hai ("Dec '25" jaisa) — 30 rakhne par patli screen par labels chipak jate the. */
-  const tickEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(innerW / 46))));
+  /* x-axis par utne hi ticks jitne bina takraye aa sakein — label ki ASLI chaudai se.
+     "Dec '25" ~50px leta hai par din ka number ("17") sirf ~20px, isliye din-wise
+     chart me kaafi zyada dates dikh sakti hain. */
+  const catW = useMemo(() => {
+    const longest = cats.reduce((m, s) => Math.max(m, String(s).length), 1);
+    return Math.max(20, longest * 6.2 + 10);
+  }, [cats]);
+  const tickEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(innerW / catW))));
   /* Pehla aur aakhri label bahar na latke — unhe andar ki taraf anchor karte hain. */
   const anchor = (i) => (i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle');
 
@@ -406,6 +445,11 @@ export function TrendChart({ values = [], cats = [], tipCats = [], rolls = [], c
     const rowsOut = [{ k: metricLabel, v: nfmt(values[i]) + ' ' + unit, c: color }];
     if (rolls[i] !== undefined) rowsOut.push({ k: 'Rolls', v: nfmt(rolls[i]) + ' pcs' });
     showTip(ev, tipCats[i] || cats[i] || '#' + (i + 1), rowsOut);
+  };
+  /* touch par bhi wahi readout — mobile par hover hota hi nahi */
+  const touch = (ev) => {
+    const t = ev.touches && ev.touches[0];
+    if (t) move({ clientX: t.clientX, clientY: t.clientY });
   };
 
   return (
@@ -454,7 +498,7 @@ export function TrendChart({ values = [], cats = [], tipCats = [], rolls = [], c
 }
 
 /* ── unit × month heat map ── */
-export function HeatMap({ rows = [], cols = [], matrix = [], unit = '' }) {
+export function HeatMap({ rows = [], cols = [], matrix = [], rollsMatrix = [], unit = '' }) {
   const [tip, showTip, hideTip] = useTip();
   const ramp = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)', 'var(--seq-6)', 'var(--seq-7)'];
   const max = Math.max(...matrix.flat(), 1);
@@ -470,7 +514,10 @@ export function HeatMap({ rows = [], cols = [], matrix = [], unit = '' }) {
           {cols.map((c) => <div key={c} className="axis-lbl text-center" style={{ fontSize: '10.5px', color: 'var(--muted)', paddingBottom: 2 }}>{c}</div>)}
           {rows.map((r, i) => (
             <Row key={r} label={r} vals={matrix[i]} shade={shade} deep={deep}
-              onOver={(e, j) => showTip(e, `${r} · ${cols[j]}`, [{ k: 'Cut', v: nfmt(matrix[i][j]) + ' ' + unit, c: shade(matrix[i][j]) }])} onOut={hideTip} />
+              onOver={(e, j) => showTip(e, `${r} · ${cols[j]}`, [
+                { k: 'Cut', v: nfmt(matrix[i][j]) + ' ' + unit, c: shade(matrix[i][j]) },
+                ...(rollsMatrix[i] ? [{ k: 'Rolls', v: nfmt(rollsMatrix[i][j]) + ' pcs' }] : [])
+              ])} onOut={hideTip} />
           ))}
         </div>
       </div>
@@ -504,20 +551,43 @@ function Row({ label, vals, shade, deep, onOver, onOut }) {
 /* ── turnaround distribution ── */
 export function Histogram({ bins = [], color = 'var(--s-in)', height = 220 }) {
   const [box, w] = useSize();
+  const [tip, showTip, hideTip] = useTip();
+  const [hover, setHover] = useState(-1);
   const pad = { t: 24, r: 10, b: 36, l: 44 };
   const iw = Math.max(60, w - pad.l - pad.r), ih = height - pad.t - pad.b;
   const mx = niceMax(Math.max(...bins.map((b) => b.value), 1));
   const n = Math.max(1, bins.length), band = iw / n, bw = Math.min(24, band * 0.55);
   const y = (v) => pad.t + ih * (1 - v / mx);
   const ticks = []; for (let t = 0; t <= 4; t++) ticks.push({ y: y((mx / 4) * t), label: compact((mx / 4) * t) });
+  /* Is chart par pehle koi readout nahi tha — bar dekh kar sirf ginti pata chalti thi,
+     share nahi. Ab hover/tap par bucket, rolls aur share teeno dikhte hain. */
+  const at = (ev) => {
+    const r = box.current.getBoundingClientRect();
+    return Math.max(0, Math.min(n - 1, Math.floor((ev.clientX - r.left - pad.l) / (band || 1))));
+  };
+  const move = (ev) => {
+    if (!bins.length) return;
+    const i = at(ev);
+    setHover(i);
+    showTip(ev, bins[i].label + ' din', [
+      { k: 'Rolls', v: nfmt(bins[i].value) + ' pcs', c: color },
+      { k: 'Share', v: (bins[i].pct ?? 0).toFixed(1) + '%' }
+    ]);
+  };
+  const touch = (ev) => { const t = ev.touches && ev.touches[0]; if (t) move({ clientX: t.clientX, clientY: t.clientY }); };
+
   return (
-    <div ref={box}>
-      <svg width={w} height={height} style={{ display: 'block', overflow: 'visible' }}>
+    <div ref={box} style={{ position: 'relative' }}>
+      <svg width={w} height={height} style={{ display: 'block', overflow: 'visible', touchAction: 'pan-y' }}
+        onMouseMove={move} onMouseLeave={() => { setHover(-1); hideTip(); }}
+        onTouchStart={touch} onTouchMove={touch} onTouchEnd={() => { setHover(-1); hideTip(); }}>
+        {hover >= 0 ? <rect x={pad.l + band * hover} y={pad.t - 6} width={band} height={ih + 12} fill="var(--ink)" opacity=".05" rx="4" /> : null}
         {ticks.map((t) => <line key={'g' + t.label} className="gridline" x1={pad.l} x2={pad.l + iw} y1={t.y} y2={t.y} />)}
         {ticks.map((t) => <text key={'t' + t.label} className="axis-lbl" x={pad.l - 8} y={t.y + 3.5} textAnchor="end">{t.label}</text>)}
         {bins.map((b, i) => {
           const x = pad.l + band * i + (band - bw) / 2;
-          return <path key={'b' + i} d={barPath(x, y(b.value), bw, ih - (y(b.value) - pad.t), 4)} fill={color} className="col" style={{ animationDelay: i * 45 + 'ms' }} />;
+          return <path key={'b' + i} d={barPath(x, y(b.value), bw, ih - (y(b.value) - pad.t), 4)} fill={color} className="col"
+            style={{ animationDelay: i * 45 + 'ms', opacity: hover < 0 ? 1 : hover === i ? 1 : 0.42 }} />;
         })}
         {bins.map((b, i) => (
           <text key={'v' + i} x={pad.l + band * i + band / 2} y={y(b.value) - 8} textAnchor="middle" className="tnum"
@@ -527,6 +597,7 @@ export function Histogram({ bins = [], color = 'var(--s-in)', height = 220 }) {
         {bins.map((b, i) => <text key={'x' + i} x={pad.l + band * i + band / 2} y={height - 18} textAnchor="middle" className="axis-lbl">{b.label}</text>)}
         <text x={pad.l + iw / 2} y={height - 3} textAnchor="middle" className="axis-lbl">days from inward to cutting</text>
       </svg>
+      <Tip tip={tip} />
     </div>
   );
 }
